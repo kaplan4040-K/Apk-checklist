@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>APK Checklist</title>
+<link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiQVBLIENoZWNrbGlzdCIsInNob3J0X25hbWUiOiJBUEsiLCJzdGFydF91cmwiOiIuIiwiZGlzcGxheSI6InN0YW5kYWxvbmUiLCJiYWNrZ3JvdW5kX2NvbG9yIjoiI2ZmZmZmZiIsInRoZW1lX2NvbG9yIjoiIzFhMWExYSJ9">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1a1a1a">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #f5f5f5;
+    --card: #fff;
+    --text: #1a1a1a;
+    --muted: #666;
+    --border: #ddd;
+    --accent: #2563eb;
+    --green: #16a34a;
+    --red: #dc2626;
+    --orange: #ea580c;
+    --radius: 8px;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+    padding-bottom: 80px;
+  }
+
+  header {
+    background: var(--text);
+    color: #fff;
+    padding: 16px 20px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  header h1 { font-size: 20px; font-weight: 700; }
+  header p { font-size: 12px; color: #aaa; margin-top: 2px; }
+
+  .progress-bar {
+    height: 3px;
+    background: #333;
+    position: sticky;
+    top: 60px;
+    z-index: 99;
+  }
+  .progress-bar .fill {
+    height: 100%;
+    background: var(--green);
+    transition: width 0.3s ease;
+    width: 0%;
+  }
+
+  .vehicle-info {
+    background: var(--card);
+    margin: 12px;
+    padding: 16px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+  }
+  .vehicle-info h2 {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .field-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .field-grid.full { grid-template-columns: 1fr; }
+  .field label {
+    display: block;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .field input, .field select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 16px;
+    background: var(--bg);
+    color: var(--text);
+    -webkit-appearance: none;
+  }
+  .field input:focus, .field select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(37,99,235,0.15);
+  }
+
+  .section {
+    margin: 12px;
+  }
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .section-header:active { background: #f0f0f0; }
+  .section-header h3 {
+    font-size: 15px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-header .num {
+    background: var(--text);
+    color: #fff;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+  .section-header .badge {
+    font-size: 12px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 500;
+  }
+  .badge.pending { background: #fef3c7; color: #92400e; }
+  .badge.done { background: #dcfce7; color: #166534; }
+  .badge.issues { background: #fee2e2; color: #991b1b; }
+
+  .section-header .arrow {
+    transition: transform 0.2s;
+    color: var(--muted);
+  }
+  .section.open .arrow { transform: rotate(180deg); }
+
+  .section-body {
+    display: none;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 var(--radius) var(--radius);
+    padding: 8px 0;
+  }
+  .section.open .section-body { display: block; }
+  .section.open .section-header {
+    border-radius: var(--radius) var(--radius) 0 0;
+  }
+
+  .check-item {
+    padding: 12px 16px;
+    border-bottom: 1px solid #f0f0f0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .check-item:last-child { border-bottom: none; }
+
+  .check-main {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .check-main label {
+    flex: 1;
+    font-size: 14px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .status-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    font-size: 18px;
+    transition: all 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .status-btn.ok { border-color: var(--green); background: var(--green); color: #fff; }
+  .status-btn.fail { border-color: var(--red); background: var(--red); color: #fff; }
+  .status-btn.na { border-color: var(--muted); background: var(--muted); color: #fff; font-size: 11px; font-weight: 700; }
+
+  .check-sides {
+    display: flex;
+    gap: 6px;
+    margin-left: 48px;
+  }
+  .side-chip {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: #fff;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .side-chip.checked { background: var(--green); color: #fff; border-color: var(--green); }
+  .side-chip.fail { background: var(--red); color: #fff; border-color: var(--red); }
+
+  .check-remark {
+    margin-left: 48px;
+  }
+  .check-remark input {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+    background: var(--bg);
+  }
+  .check-remark input:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  .notes-section {
+    margin: 12px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+  }
+  .notes-section h3 {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .notes-section textarea {
+    width: 100%;
+    min-height: 100px;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: inherit;
+    resize: vertical;
+    background: var(--bg);
+  }
+  .notes-section textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  .bottom-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #fff;
+    border-top: 1px solid var(--border);
+    padding: 12px 16px;
+    display: flex;
+    gap: 10px;
+    z-index: 100;
+  }
+  .bottom-bar button {
+    flex: 1;
+    padding: 12px;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn-reset {
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border) !important;
+  }
+  .btn-pdf {
+    background: var(--accent);
+    color: #fff;
+  }
+  .btn-pdf:active { background: #1d4ed8; }
+
+  /* PDF styles */
+  .pdf-output {
+    display: none;
+    font-family: Arial, Helvetica, sans-serif;
+    padding: 20px;
+    font-size: 11px;
+    color: #000;
+    max-width: 210mm;
+  }
+  .pdf-output h1 { font-size: 18px; margin-bottom: 4px; }
+  .pdf-output .pdf-subtitle { font-size: 11px; color: #555; margin-bottom: 12px; }
+  .pdf-output .pdf-info { margin-bottom: 12px; }
+  .pdf-output .pdf-info span { display: inline-block; margin-right: 20px; font-size: 11px; }
+  .pdf-output h2 { font-size: 13px; margin: 10px 0 4px; padding: 4px 0; border-bottom: 1px solid #ccc; }
+  .pdf-output table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+  .pdf-output th, .pdf-output td {
+    border: 1px solid #ccc;
+    padding: 3px 6px;
+    text-align: left;
+    font-size: 10px;
+  }
+  .pdf-output th { background: #f0f0f0; font-weight: 600; }
+  .pdf-output .status-ok { color: #16a34a; font-weight: 700; }
+  .pdf-output .status-fail { color: #dc2626; font-weight: 700; }
+  .pdf-output .status-na { color: #666; }
+  .pdf-output .pdf-notes { margin-top: 10px; padding: 8px; border: 1px solid #ccc; border-radius: 4px; min-height: 40px; font-size: 11px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>APK Checklist</h1>
+  <p>Personenauto / N1</p>
+</header>
+<div class="progress-bar"><div class="fill" id="progressFill"></div></div>
+
+<div class="vehicle-info">
+  <h2>Voertuiggegevens</h2>
+  <div class="field-grid">
+    <div class="field">
+      <label>Kenteken</label>
+      <input type="text" id="v-kenteken" placeholder="XX-999-X" autocapitalize="characters">
+    </div>
+    <div class="field">
+      <label>Meldcode</label>
+      <input type="text" id="v-meldcode" placeholder="Meldcode">
+    </div>
+    <div class="field">
+      <label>KM-stand</label>
+      <input type="number" id="v-km" placeholder="123456" inputmode="numeric">
+    </div>
+    <div class="field">
+      <label>Brandstof</label>
+      <select id="v-brandstof">
+        <option value="">Kies...</option>
+        <option>Benzine</option>
+        <option>Diesel</option>
+        <option>LPG</option>
+        <option>Hybride</option>
+        <option>Elektrisch</option>
+      </select>
+    </div>
+  </div>
+  <div class="field-grid full" style="margin-top:10px">
+    <div class="field">
+      <label>Datum</label>
+      <input type="date" id="v-datum">
+    </div>
+  </div>
+</div>
+
+<div id="checklistContainer"></div>
+
+<div class="notes-section">
+  <h3>Opmerkingen / Afkeurpunten</h3>
+  <textarea id="generalNotes" placeholder="Aanvullende opmerkingen..."></textarea>
+</div>
+
+<div class="bottom-bar">
+  <button class="btn-reset" onclick="resetAll()">Reset</button>
+  <button class="btn-pdf" onclick="exportPDF()">PDF Exporteren</button>
+</div>
+
+<div class="pdf-output" id="pdfOutput"></div>
+
+<script>
+const checklistData = [
+  {
+    title: "Identificatie & registratie",
+    items: [
+      { text: "Kentekenplaten aanwezig/leesbaar", sides: false },
+      { text: "VIN aanwezig/leesbaar", sides: false }
+    ]
+  },
+  {
+    title: "Verlichting & elektra",
+    items: [
+      { text: "Stadslicht", sides: ["R","L"] },
+      { text: "Dimlicht", sides: ["R","L"] },
+      { text: "Grootlicht", sides: ["R","L"] },
+      { text: "Achterlicht", sides: ["R","L"] },
+      { text: "Richtingaanwijzers", sides: ["RV","LV","RA","LA"] },
+      { text: "Remlichten", sides: ["R","M","L"] },
+      { text: "Mistachterlicht aanwezig en werkend", sides: false },
+      { text: "Kentekenplaatverlichting/reflectoren", sides: ["R","L"] },
+      { text: "Claxon en controlelampjes correct", sides: false }
+    ]
+  },
+  {
+    title: "Banden & wielen",
+    items: [
+      { text: "Profieldiepte \u2265 1,6 mm", sides: ["RV","LV","RA","LA"] },
+      { text: "Geen beschadigingen (koord/bobbels)", sides: ["RV","LV","RA","LA"] },
+      { text: "Juiste maat/loadindex", sides: ["RV","LV","RA","LA"] },
+      { text: "Wielmoeren/bouten vast", sides: ["RV","LV","RA","LA"] },
+      { text: "TPMS (bandenspanningscontrolesysteem)", sides: ["RV","LV","RA","LA"] }
+    ]
+  },
+  {
+    title: "Remmen",
+    items: [
+      { text: "Remwerking & balans (testbank)", sides: ["RV","LV","RA","LA"] },
+      { text: "Parkeerrem effectief", sides: ["R","L"] },
+      { text: "Remleidingen/slangen/slijtage", sides: ["RV","LV","RA","LA"] },
+      { text: "Remvloeistof lekkage: geen", sides: ["RV","LV","RA","LA"] },
+      { text: "Remvoeringen/-blokken op dikte", sides: ["RV","LV","RA","LA"] },
+      { text: "ABS/EBS waarschuwingslampje", sides: false }
+    ]
+  },
+  {
+    title: "Stuurinrichting & ophanging",
+    items: [
+      { text: "Fuseekogel", sides: ["R","L"] },
+      { text: "Stuurkogel", sides: ["R","L"] },
+      { text: "Draagarm", sides: ["R","L"] },
+      { text: "Stabilisatorstang", sides: ["R","L"] },
+      { text: "Schokdempers functioneel", sides: ["R","L"] },
+      { text: "Veerpoten/veren/subframe in goede staat", sides: ["R","L"] },
+      { text: "Wiellagers zonder geluid of speling", sides: ["R","L"] }
+    ]
+  },
+  {
+    title: "Carrosserie & veiligheidsgordels",
+    items: [
+      { text: "Geen gevaarlijke roest/scherpe delen", sides: ["R","L"] },
+      { text: "Deuren/motorkap/kofferdeksel sluiten goed", sides: ["R","L"] },
+      { text: "Stoelen bevestigd, geen speling", sides: ["R","L"] },
+      { text: "Gordels aanwezig en werkend", sides: ["R","L"] }
+    ]
+  },
+  {
+    title: "Zichtveld, ruiten & spiegels",
+    items: [
+      { text: "Voorruit zonder scheuren/sterren in zichtveld", sides: false },
+      { text: "Ruitenwissers/sproeiers werken", sides: ["R","L"] },
+      { text: "Spiegels aanwezig en intact", sides: ["R","L"] }
+    ]
+  },
+  {
+    title: "Uitlaat, geluid & lekkage",
+    items: [
+      { text: "Uitlaat gasdicht en bevestigd", sides: false },
+      { text: "Geen overmatige rook/geluid", sides: false },
+      { text: "Geen lekkages (brandstof/olie/koelvloeistof)", sides: false }
+    ]
+  },
+  {
+    title: "Milieu \u2013 emissie",
+    items: [
+      { text: "Benzine/LPG: OBD of viergas/lambda", sides: false },
+      { text: "Diesel: rookmeting of deeltjestest", sides: false },
+      { text: "Brandstofsysteem verdamping dicht", sides: false }
+    ]
+  },
+  {
+    title: "Overige",
+    items: [
+      { text: "Trekhaak aanwezig/deugdelijk", sides: false },
+      { text: "Bandenspanning controle", sides: false },
+      { text: "Koplamp afstellen", sides: false },
+      { text: "Lampjes op de display", sides: false }
+    ]
+  },
+  {
+    title: "Adviespunten (AC)",
+    items: [
+      { text: "AC1 — Band(en) met profieldiepte 1,6\u20132,5 mm", sides: false },
+      { text: "AC2 — Schokdemper vertoont beginnende lekkage", sides: false },
+      { text: "AC3 — Roestschade licht aanwezig", sides: false },
+      { text: "AC4 — Stuur- of fuseekogel lichte slijtage (< 1,0 mm)", sides: false },
+      { text: "AC5 — Mechanische delen remsysteem lichte slijtage", sides: false }
+    ]
+  },
+  {
+    title: "Reparatie-adviezen (RA)",
+    items: [
+      { text: "RA1 — Waarschuwing airbag-/gordelsysteem defect", sides: false },
+      { text: "RA2 — Overmatige vloeistoflekkage", sides: false },
+      { text: "RA3 — ESP/ESC defect", sides: false },
+      { text: "RA4 — TPMS defect", sides: false },
+      { text: "RA5 — Elektronische stuurbekrachtiging defect", sides: false },
+      { text: "RA6 — ABS of elektronisch remsysteem defect", sides: false }
+    ]
+  }
+];
+
+// State: itemStates[sectionIdx][itemIdx] = { status: 'none'|'ok'|'fail'|'na', sides: {R:0,M:0,L:0}, remark: '' }
+let itemStates = [];
+
+function initState() {
+  itemStates = checklistData.map(section =>
+    section.items.map(item => ({
+      status: 'none',
+      sides: item.sides ? Object.fromEntries(item.sides.map(s => [s, 0])) : {},
+      remark: ''
+    }))
+  );
+}
+
+function buildChecklist() {
+  const container = document.getElementById('checklistContainer');
+  container.innerHTML = '';
+
+  checklistData.forEach((section, si) => {
+    const div = document.createElement('div');
+    div.className = 'section';
+    div.id = `section-${si}`;
+
+    div.innerHTML = `
+      <div class="section-header" onclick="toggleSection(${si})">
+        <h3><span class="num">${si + 1}</span>${section.title}</h3>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="badge pending" id="badge-${si}">0/${section.items.length}</span>
+          <span class="arrow">\u25BC</span>
+        </div>
+      </div>
+      <div class="section-body" id="body-${si}">
+        ${section.items.map((item, ii) => buildItem(si, ii, item)).join('')}
+      </div>
+    `;
+    container.appendChild(div);
+  });
+}
+
+function buildItem(si, ii, item) {
+  const sidesHtml = item.sides ? `
+    <div class="check-sides">
+      ${item.sides.map(s => `<span class="side-chip" data-s="${si}" data-i="${ii}" data-side="${s}" onclick="toggleSide(this)">${s}</span>`).join('')}
+    </div>
+  ` : '';
+
+  return `
+    <div class="check-item">
+      <div class="check-main">
+        <button class="status-btn" id="btn-${si}-${ii}" onclick="cycleStatus(${si},${ii})" title="Tik om status te wijzigen"></button>
+        <label onclick="cycleStatus(${si},${ii})">${item.text}</label>
+      </div>
+      ${sidesHtml}
+      <div class="check-remark">
+        <input type="text" placeholder="Opmerking..." oninput="itemStates[${si}][${ii}].remark=this.value">
+      </div>
+    </div>
+  `;
+}
+
+function cycleStatus(si, ii) {
+  const states = ['none', 'ok', 'fail', 'na'];
+  const current = itemStates[si][ii].status;
+  const next = states[(states.indexOf(current) + 1) % states.length];
+  itemStates[si][ii].status = next;
+
+  // Auto-set sides: ok → all green, fail → all red, none/na → reset
+  const sides = itemStates[si][ii].sides;
+  if (Object.keys(sides).length > 0) {
+    const sideVal = next === 'ok' ? 1 : next === 'fail' ? 2 : 0;
+    Object.keys(sides).forEach(s => { sides[s] = sideVal; });
+    updateSideChips(si, ii);
+  }
+
+  updateBtn(si, ii);
+  updateBadge(si);
+  updateProgress();
+}
+
+function updateBtn(si, ii) {
+  const btn = document.getElementById(`btn-${si}-${ii}`);
+  const st = itemStates[si][ii].status;
+  btn.className = 'status-btn' + (st !== 'none' ? ' ' + st : '');
+  btn.textContent = st === 'ok' ? '\u2713' : st === 'fail' ? '\u2717' : st === 'na' ? 'N/A' : '';
+}
+
+function toggleSide(el) {
+  const si = +el.dataset.s, ii = +el.dataset.i, side = el.dataset.side;
+  const current = itemStates[si][ii].sides[side];
+  // 0 = unchecked, 1 = ok, 2 = fail
+  const next = (current + 1) % 3;
+  itemStates[si][ii].sides[side] = next;
+  el.className = 'side-chip' + (next === 1 ? ' checked' : next === 2 ? ' fail' : '');
+
+  // Sync main status from side chips
+  const sides = itemStates[si][ii].sides;
+  const vals = Object.values(sides);
+  if (vals.some(v => v === 2)) {
+    itemStates[si][ii].status = 'fail';
+  } else if (vals.length > 0 && vals.every(v => v === 1)) {
+    itemStates[si][ii].status = 'ok';
+  } else if (vals.some(v => v === 1)) {
+    itemStates[si][ii].status = 'ok'; // deels ingevuld, maar geen fouten
+  } else {
+    itemStates[si][ii].status = 'none';
+  }
+  updateBtn(si, ii);
+  updateBadge(si);
+  updateProgress();
+}
+
+function updateSideChips(si, ii) {
+  const chips = document.querySelectorAll(`.side-chip[data-s="${si}"][data-i="${ii}"]`);
+  chips.forEach(chip => {
+    const side = chip.dataset.side;
+    const val = itemStates[si][ii].sides[side];
+    chip.className = 'side-chip' + (val === 1 ? ' checked' : val === 2 ? ' fail' : '');
+  });
+}
+
+function updateBadge(si) {
+  const badge = document.getElementById(`badge-${si}`);
+  const items = itemStates[si];
+  const done = items.filter(i => i.status !== 'none').length;
+  const hasFail = items.some(i => i.status === 'fail');
+  badge.textContent = `${done}/${items.length}`;
+  badge.className = 'badge ' + (done === items.length ? (hasFail ? 'issues' : 'done') : 'pending');
+}
+
+function updateProgress() {
+  const total = itemStates.flat().length;
+  const done = itemStates.flat().filter(i => i.status !== 'none').length;
+  document.getElementById('progressFill').style.width = `${(done / total * 100)}%`;
+}
+
+function toggleSection(si) {
+  document.getElementById(`section-${si}`).classList.toggle('open');
+}
+
+function resetAll() {
+  if (!confirm('Weet je zeker dat je alles wilt resetten?')) return;
+  document.querySelectorAll('.vehicle-info input, .vehicle-info select').forEach(el => el.value = '');
+  document.getElementById('generalNotes').value = '';
+  initState();
+  buildChecklist();
+  updateProgress();
+}
+
+function exportPDF() {
+  const kenteken = document.getElementById('v-kenteken').value || '-';
+  const meldcode = document.getElementById('v-meldcode').value || '-';
+  const km = document.getElementById('v-km').value || '-';
+  const brandstof = document.getElementById('v-brandstof').value || '-';
+  const datum = document.getElementById('v-datum').value || new Date().toISOString().slice(0,10);
+  const notes = document.getElementById('generalNotes').value;
+
+  let html = `
+    <h1>APK Checklist \u2014 Personenauto / N1</h1>
+    <div class="pdf-subtitle">Datum: ${datum}</div>
+    <div class="pdf-info">
+      <span><b>Kenteken:</b> ${kenteken}</span>
+      <span><b>Meldcode:</b> ${meldcode}</span>
+      <span><b>KM-stand:</b> ${km}</span>
+      <span><b>Brandstof:</b> ${brandstof}</span>
+    </div>
+  `;
+
+  checklistData.forEach((section, si) => {
+    html += `<h2>${si + 1}. ${section.title}</h2><table><tr><th style="width:30px">Status</th><th>Controlepunt</th>`;
+    const hasSides = section.items.some(i => i.sides);
+    if (hasSides) {
+      const has4 = section.items.some(i => i.sides && i.sides.length === 4);
+      html += `<th style="width:${has4 ? '90px' : '60px'}">${has4 ? 'RV/LV/RA/LA' : 'R/M/L'}</th>`;
+    }
+    html += '<th>Opmerking</th></tr>';
+
+    section.items.forEach((item, ii) => {
+      const state = itemStates[si][ii];
+      const statusLabel = state.status === 'ok' ? '<span class="status-ok">\u2713</span>'
+        : state.status === 'fail' ? '<span class="status-fail">\u2717</span>'
+        : state.status === 'na' ? '<span class="status-na">N/A</span>' : '\u2013';
+
+      let sidesStr = '';
+      if (item.sides) {
+        sidesStr = item.sides.map(s => {
+          const v = state.sides[s];
+          return v === 1 ? `${s}\u2713` : v === 2 ? `${s}\u2717` : `${s}\u2013`;
+        }).join(' ');
+      }
+
+      html += `<tr><td style="text-align:center">${statusLabel}</td><td>${item.text}</td>`;
+      if (hasSides) html += `<td style="font-size:9px">${sidesStr}</td>`;
+      html += `<td>${state.remark || ''}</td></tr>`;
+    });
+    html += '</table>';
+  });
+
+  if (notes) {
+    html += `<h2>Opmerkingen / Afkeurpunten</h2><div class="pdf-notes">${notes.replace(/\n/g, '<br>')}</div>`;
+  }
+
+  // Summary
+  const totalItems = itemStates.flat().length;
+  const okCount = itemStates.flat().filter(i => i.status === 'ok').length;
+  const failCount = itemStates.flat().filter(i => i.status === 'fail').length;
+  const naCount = itemStates.flat().filter(i => i.status === 'na').length;
+  const unchecked = totalItems - okCount - failCount - naCount;
+
+  html += `<div style="margin-top:12px;padding:8px;border:1px solid #ccc;border-radius:4px;font-size:11px">
+    <b>Samenvatting:</b> ${okCount} goedgekeurd \u00b7 ${failCount} afgekeurd \u00b7 ${naCount} n.v.t. \u00b7 ${unchecked} niet ingevuld
+  </div>`;
+
+  const pdfEl = document.getElementById('pdfOutput');
+  pdfEl.innerHTML = html;
+  pdfEl.style.display = 'block';
+
+  const filename = `APK_${kenteken.replace(/[^a-zA-Z0-9]/g, '')}_${datum}.pdf`;
+
+  html2pdf().set({
+    margin: [8, 10, 8, 10],
+    filename: filename,
+    html2canvas: { scale: 2, useCORS: true },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+    pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+  }).from(pdfEl).save().then(() => {
+    pdfEl.style.display = 'none';
+  });
+}
+
+// Init
+document.getElementById('v-datum').value = new Date().toISOString().slice(0, 10);
+initState();
+buildChecklist();
+</script>
+</body>
+</html>
