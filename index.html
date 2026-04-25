@@ -190,6 +190,21 @@
   .summary-alert.warn { background: #fef3c7; border: 1px solid #f59e0b; color: #92400e; }
   .summary-alert.danger { background: #fee2e2; border: 1px solid #ef4444; color: #991b1b; }
 
+  /* Aandachtspunten blok */
+  .attention-card {
+    background: var(--card);
+    margin: 0 12px 12px;
+    padding: 14px 16px;
+    border-radius: var(--radius);
+    border: 1px solid #f59e0b;
+    border-left: 4px solid #f59e0b;
+    display: none;
+  }
+  .attention-card.show { display: block; }
+  .attention-card h3 { font-size: 14px; font-weight: 700; color: #92400e; margin-bottom: 8px; }
+  .attention-card ul { margin: 0; padding: 0 0 0 18px; font-size: 13px; color: #78350f; }
+  .attention-card ul li { margin-bottom: 4px; }
+
   .section {
     margin: 12px;
   }
@@ -469,6 +484,11 @@
 
 <div class="vehicle-card" id="vehicleCard">
   <div id="vehicleCardContent"></div>
+</div>
+
+<div class="attention-card" id="attentionCard">
+  <h3>⚠ Veelvoorkomende afkeurpunten voor dit model</h3>
+  <ul id="attentionList"></ul>
 </div>
 
 <div id="checklistContainer"></div>
@@ -843,18 +863,234 @@ function doLookup() {
           '<div><div class="vc-label">APK vervalt</div><div class="vc-val">' + apkVervaldatum + '</div></div>' +
         '</div>';
 
-      // Also fetch APK history for last km
-      fetch('https://opendata.rdw.nl/resource/sgfe-77wx.json?kenteken=' + raw + '&$order=datum_tenaamstelling_dt DESC&$limit=1')
+      // Also fetch brandstof details
+      fetch('https://opendata.rdw.nl/resource/8ys7-d773.json?kenteken=' + raw)
         .then(r2 => r2.json())
-        .then(apkData => {
-          if (apkData && apkData.length > 0 && apkData[0].meldcode_toelichting) {
-            // add meldcode info if available
+        .then(bsData => {
+          if (bsData && bsData.length > 0) {
+            const bsOmschr = bsData[0].brandstof_omschrijving || '';
+            if (bsOmschr) {
+              const bsSelect2 = document.getElementById('v-brandstof');
+              const bsMap2 = {'Benzine':'Benzine','Diesel':'Diesel','LPG':'LPG','Elektriciteit':'Elektrisch','Waterstof':'Elektrisch'};
+              const mapped2 = bsMap2[bsOmschr] || '';
+              if (mapped2) {
+                for (let j = 0; j < bsSelect2.options.length; j++) {
+                  if (bsSelect2.options[j].value === mapped2) { bsSelect2.selectedIndex = j; break; }
+                }
+              }
+            }
           }
         }).catch(function(){});
+
+      // Show common failure points
+      showAttentionPoints(merk, model, parseInt(bouwjaar));
     })
     .catch(function() {
       content.innerHTML = '<div class="vc-error">Fout bij opzoeken. Controleer je internetverbinding.</div>';
     });
+}
+
+// Veelvoorkomende afkeurpunten database per merk
+const commonFailures = {
+  'VOLKSWAGEN': {
+    all: ['Stuurkogels/fuseekogels speling', 'Schokdempers lekkage', 'Roest bij wielkastranden'],
+    models: {
+      'GOLF': ['Stabilisatorstang rubber versleten', 'Achterlicht behuizing condensvorming', 'Remschijven achter slijtage'],
+      'POLO': ['Draagarm rubbers versleten', 'Uitlaat ophangpunten roest', 'Stuurhuis lekkage'],
+      'PASSAT': ['Remleiding corrosie', 'Schokdempers achter lekkage', 'Roest dorpels en wielkasten'],
+      'TIGUAN': ['Remleidingen corrosie', 'Koppelstang speling', 'Stuurkogels speling'],
+      'UP!': ['Stabilisatorstang speling', 'Remblokken slijtage', 'Koplamp afstelling'],
+      'TRANSPORTER': ['Roest schuifdeurrail', 'Remschijven slijtage', 'Schokdempers versleten'],
+    }
+  },
+  'OPEL': {
+    all: ['Roest bij achterschermen', 'Stabilisatorstang speling', 'Veerpootlagers versleten'],
+    models: {
+      'CORSA': ['Draagarm rubbers', 'Achterlicht storingen', 'Uitlaat roest'],
+      'ASTRA': ['Fuseekogels speling', 'Remleiding corrosie', 'Roest dorpels'],
+      'MERIVA': ['Stuurkogels speling', 'Schokdempers lekkage', 'Wiellagerspeling'],
+      'MOKKA': ['Remleidingen corrosie', 'Koppelstang speling', 'Handrem afstelling'],
+    }
+  },
+  'RENAULT': {
+    all: ['Stuurkogels speling', 'Roest subframe', 'Uitlaatsysteem lekkage'],
+    models: {
+      'CLIO': ['Draagarm rubbers', 'Stabilisatorstang rubber', 'Achterlicht storing'],
+      'MEGANE': ['Schokdempers lekkage', 'Fuseekogels speling', 'Remschijven slijtage'],
+      'SCENIC': ['Remleidingen corrosie', 'Schokdempers versleten', 'Roest aan subframe'],
+      'CAPTUR': ['Koppelstang speling', 'Remblokken slijtage', 'Koplamp afstelling'],
+    }
+  },
+  'PEUGEOT': {
+    all: ['Draagarm rubbers versleten', 'Roest remleidingen', 'Uitlaat ophangpunten'],
+    models: {
+      '206': ['Fuseekogels speling', 'Stabilisatorstang rubber', 'Roest dorpels en bodem'],
+      '207': ['Stuurkogels speling', 'Remleidingen corrosie', 'Schokdempers lekkage'],
+      '208': ['Koppelstang speling', 'Remblokken slijtage', 'Achterlicht storing'],
+      '308': ['Uitlaat lekkage', 'Schokdempers achter', 'Roest wielkasten'],
+      '3008': ['Remleidingen', 'Stabilisatorstang speling', 'Koplamp afstelling'],
+    }
+  },
+  'FORD': {
+    all: ['Roest bij wielkasten en dorpels', 'Fuseekogels speling', 'Remleidingen corrosie'],
+    models: {
+      'FIESTA': ['Stabilisatorstang rubber', 'Draagarm rubbers', 'Uitlaat ophangpunten roest'],
+      'FOCUS': ['Stuurkogels speling', 'Schokdempers lekkage', 'Remleidingen corrosie'],
+      'KA': ['Roest bodem en dorpels', 'Remschijven slijtage', 'Uitlaat roest'],
+      'MONDEO': ['Remleidingen', 'Schokdempers versleten', 'Roest subframe'],
+    }
+  },
+  'TOYOTA': {
+    all: ['Uitlaat corrosie', 'Stabilisatorstang rubbers', 'Roest wielkasten (oudere modellen)'],
+    models: {
+      'AYGO': ['Draagarm rubbers', 'Remblokken slijtage', 'Uitlaat ophangpunten'],
+      'YARIS': ['Schokdempers achter', 'Stuurkogels speling', 'Roest achterschermen'],
+      'COROLLA': ['Remleidingen (ouder model)', 'Stabilisatorstang', 'Koppelstang speling'],
+      'C-HR': ['Remblokken slijtage', 'Koplamp afstelling', 'Wiellagerspeling'],
+    }
+  },
+  'BMW': {
+    all: ['Stuurkogels/fuseekogels speling', 'Olieverlies', 'Schokdempers lekkage'],
+    models: {
+      '1-SERIE': ['Draagarm rubbers', 'Stabilisatorstang speling', 'Remleidingen'],
+      '3-SERIE': ['Fuseekogels speling', 'Schokdempers lekkage', 'Roest wielkasten'],
+      '5-SERIE': ['Stuurhuis lekkage', 'Remleidingen corrosie', 'Olieverlies motor'],
+    }
+  },
+  'MERCEDES-BENZ': {
+    all: ['Roest bij wielkasten', 'Stuurkogels speling', 'Remleidingen corrosie'],
+    models: {
+      'A-KLASSE': ['Stabilisatorstang rubber', 'Draagarm rubbers', 'Schokdempers lekkage'],
+      'B-KLASSE': ['Fuseekogels speling', 'Remblokken slijtage', 'Koppelstang speling'],
+      'C-KLASSE': ['Remleidingen', 'Schokdempers versleten', 'Stuurkogels speling'],
+    }
+  },
+  'AUDI': {
+    all: ['Stuurkogels speling', 'Olieverlies', 'Stabilisatorstang versleten'],
+    models: {
+      'A3': ['Draagarm rubbers', 'Fuseekogels speling', 'Schokdempers lekkage'],
+      'A4': ['Remleidingen corrosie', 'Stuurhuis speling', 'Wiellagerspeling'],
+      'A6': ['Schokdempers lekkage', 'Olieverlies', 'Remleidingen'],
+    }
+  },
+  'KIA': {
+    all: ['Stabilisatorstang speling', 'Schokdempers lekkage', 'Roest remleidingen'],
+    models: {
+      'PICANTO': ['Draagarm rubbers', 'Uitlaat roest', 'Remblokken slijtage'],
+      'RIO': ['Koppelstang speling', 'Schokdempers achter', 'Stuurkogels'],
+      'SPORTAGE': ['Remleidingen', 'Roest wielkasten', 'Fuseekogels speling'],
+    }
+  },
+  'HYUNDAI': {
+    all: ['Stabilisatorstang rubber', 'Remleidingen corrosie', 'Schokdempers lekkage'],
+    models: {
+      'I10': ['Draagarm rubbers', 'Uitlaat ophangpunten', 'Remblokken slijtage'],
+      'I20': ['Koppelstang speling', 'Schokdempers achter', 'Stuurkogels'],
+      'I30': ['Fuseekogels speling', 'Remleidingen', 'Roest achterschermen'],
+      'TUCSON': ['Remleidingen corrosie', 'Stabilisatorstang', 'Wiellagerspeling'],
+    }
+  },
+  'FIAT': {
+    all: ['Roest dorpels en bodem', 'Draagarm rubbers', 'Uitlaat corrosie'],
+    models: {
+      '500': ['Stabilisatorstang speling', 'Stuurkogels', 'Remblokken slijtage'],
+      'PUNTO': ['Roest bodem', 'Fuseekogels speling', 'Schokdempers lekkage'],
+      'PANDA': ['Draagarm rubbers', 'Uitlaat roest', 'Remleidingen'],
+    }
+  },
+  'CITROEN': {
+    all: ['Draagarm rubbers', 'Stuurkogels speling', 'Uitlaat ophangpunten'],
+    models: {
+      'C1': ['Stabilisatorstang rubber', 'Remblokken slijtage', 'Uitlaat roest'],
+      'C3': ['Fuseekogels speling', 'Schokdempers lekkage', 'Koppelstang'],
+      'C4': ['Remleidingen corrosie', 'Roest wielkasten', 'Stuurhuis speling'],
+    }
+  },
+  'MAZDA': {
+    all: ['Roest wielkasten en dorpels', 'Stabilisatorstang speling', 'Remleidingen corrosie'],
+    models: {
+      '2': ['Draagarm rubbers', 'Uitlaat roest', 'Schokdempers achter'],
+      '3': ['Fuseekogels speling', 'Remleidingen', 'Roest achterschermen'],
+      'CX-5': ['Remschijven slijtage', 'Koppelstang speling', 'Stuurkogels'],
+    }
+  },
+  'SUZUKI': {
+    all: ['Roest chassis/subframe', 'Stabilisatorstang rubber', 'Uitlaat corrosie'],
+    models: {
+      'SWIFT': ['Draagarm rubbers', 'Remblokken slijtage', 'Schokdempers lekkage'],
+      'VITARA': ['Remleidingen corrosie', 'Fuseekogels speling', 'Roest chassis'],
+    }
+  },
+  'NISSAN': {
+    all: ['Stabilisatorstang speling', 'Remleidingen corrosie', 'Schokdempers versleten'],
+    models: {
+      'MICRA': ['Draagarm rubbers', 'Uitlaat roest', 'Stuurkogels speling'],
+      'QASHQAI': ['Fuseekogels speling', 'Remleidingen', 'Koppelstang speling'],
+      'JUKE': ['Schokdempers lekkage', 'Stabilisatorstang rubber', 'Remblokken slijtage'],
+    }
+  },
+};
+
+// Leeftijdsgerelateerde extra aandachtspunten
+function getAgeIssues(bouwjaar) {
+  const leeftijd = new Date().getFullYear() - bouwjaar;
+  const issues = [];
+  if (leeftijd >= 15) issues.push('Roest aan chassis, dorpels en wielkasten (leeftijd > 15 jaar)');
+  if (leeftijd >= 12) issues.push('Remleidingen corrosie controleren (leeftijd > 12 jaar)');
+  if (leeftijd >= 10) issues.push('Rubbers ophanging/stuurinrichting verharden (leeftijd > 10 jaar)');
+  if (leeftijd >= 8) issues.push('Schokdempers lekkage/effectiviteit (leeftijd > 8 jaar)');
+  if (leeftijd >= 6) issues.push('Uitlaat ophangpunten en pakking (leeftijd > 6 jaar)');
+  return issues;
+}
+
+function showAttentionPoints(merk, model, bouwjaar) {
+  const card = document.getElementById('attentionCard');
+  const list = document.getElementById('attentionList');
+  const points = [];
+
+  const merkUpper = merk.toUpperCase();
+  const modelUpper = model.toUpperCase();
+
+  // Merk-specifieke punten
+  if (commonFailures[merkUpper]) {
+    const merkData = commonFailures[merkUpper];
+    // Zoek model match
+    let modelMatch = null;
+    if (merkData.models) {
+      for (const key in merkData.models) {
+        if (modelUpper.indexOf(key) !== -1 || key.indexOf(modelUpper) !== -1) {
+          modelMatch = key;
+          break;
+        }
+      }
+    }
+    if (modelMatch && merkData.models[modelMatch]) {
+      merkData.models[modelMatch].forEach(function(p) { points.push(p); });
+    }
+    if (merkData.all) {
+      merkData.all.forEach(function(p) {
+        if (points.indexOf(p) === -1) points.push(p);
+      });
+    }
+  }
+
+  // Leeftijdsgerelateerde punten
+  if (bouwjaar && !isNaN(bouwjaar)) {
+    getAgeIssues(bouwjaar).forEach(function(p) {
+      if (points.indexOf(p) === -1) points.push(p);
+    });
+  }
+
+  if (points.length === 0) {
+    card.classList.remove('show');
+    return;
+  }
+
+  list.innerHTML = points.map(function(p) { return '<li>' + p + '</li>'; }).join('');
+  card.classList.add('show');
+
+  // Save for PDF
+  rdwData.attentionPoints = points;
 }
 
 // Summary update
@@ -931,7 +1167,9 @@ function resetAll() {
   document.querySelectorAll('.vehicle-info input, .vehicle-info select').forEach(el => el.value = '');
   document.getElementById('generalNotes').value = '';
   document.getElementById('vehicleCard').classList.remove('show');
+  document.getElementById('attentionCard').classList.remove('show');
   document.getElementById('summaryBar').classList.remove('show');
+  rdwData = null;
   initState();
   buildChecklist();
   updateProgress();
@@ -962,8 +1200,18 @@ function exportPDF() {
     html += '<span style="margin-right:16px"><b>Bouwjaar:</b> ' + rdwData.bouwjaar + '</span>';
     html += '<span style="margin-right:16px"><b>Brandstof:</b> ' + rdwData.brandstof + '</span>';
     html += '<span style="margin-right:16px"><b>Kleur:</b> ' + rdwData.kleur + '</span>';
-    html += '<span><b>APK vervalt:</b> ' + rdwData.apkVervaldatum + '</span>';
+    html += '<span style="margin-right:16px"><b>APK vervalt:</b> ' + rdwData.apkVervaldatum + '</span>';
     html += '</div>';
+
+    // Aandachtspunten in PDF
+    if (rdwData.attentionPoints && rdwData.attentionPoints.length > 0) {
+      html += '<div style="padding:8px 10px;background:#fef9e7;border:2px solid #f59e0b;border-radius:4px;font-size:10px;margin-bottom:10px">';
+      html += '<b>⚠ Veelvoorkomende afkeurpunten voor dit model:</b><ul style="margin:4px 0 0 16px;padding:0">';
+      rdwData.attentionPoints.forEach(function(p) {
+        html += '<li>' + p + '</li>';
+      });
+      html += '</ul></div>';
+    }
   }
 
   checklistData.forEach(function(section, si) {
