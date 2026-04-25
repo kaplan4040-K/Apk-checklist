@@ -7,8 +7,6 @@
 <link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiQVBLIENoZWNrbGlzdCIsInNob3J0X25hbWUiOiJBUEsiLCJzdGFydF91cmwiOiIuIiwiZGlzcGxheSI6InN0YW5kYWxvbmUiLCJiYWNrZ3JvdW5kX2NvbG9yIjoiI2ZmZmZmZiIsInRoZW1lX2NvbG9yIjoiIzFhMWExYSJ9">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#1a1a1a">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -301,6 +299,29 @@
     color: #fff;
   }
   .btn-pdf:active { background: #1d4ed8; }
+
+  #printFrame { display: none; }
+
+  .print-page {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 11px;
+    color: #000;
+    padding: 10px;
+  }
+  .print-page h1 { font-size: 18px; margin-bottom: 2px; }
+  .print-page .p-sub { font-size: 10px; color: #555; margin-bottom: 8px; }
+  .print-page .p-info { margin-bottom: 10px; font-size: 11px; }
+  .print-page .p-info b { margin-right: 2px; }
+  .print-page .p-info span { margin-right: 18px; }
+  .print-page h2 { font-size: 12px; margin: 8px 0 3px; padding-bottom: 2px; border-bottom: 1px solid #999; }
+  .print-page table { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
+  .print-page th, .print-page td { border: 1px solid #bbb; padding: 3px 5px; text-align: left; font-size: 9px; }
+  .print-page th { background: #e8e8e8; font-weight: bold; }
+  .print-page .s-ok { color: #16a34a; font-weight: bold; }
+  .print-page .s-fail { color: #dc2626; font-weight: bold; }
+  .print-page .s-na { color: #888; }
+  .print-page .p-notes { margin-top: 8px; padding: 6px; border: 1px solid #bbb; border-radius: 3px; white-space: pre-wrap; font-size: 10px; }
+  .print-page .p-summary { margin-top: 8px; padding: 6px; border: 1px solid #bbb; border-radius: 3px; font-size: 10px; }
 
 </style>
 </head>
@@ -629,10 +650,6 @@ function resetAll() {
 }
 
 function exportPDF() {
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-  const pageW = doc.internal.pageSize.getWidth();
-
   const kenteken = document.getElementById('v-kenteken').value || '-';
   const meldcode = document.getElementById('v-meldcode').value || '-';
   const km = document.getElementById('v-km').value || '-';
@@ -640,145 +657,82 @@ function exportPDF() {
   const datum = document.getElementById('v-datum').value || new Date().toISOString().slice(0,10);
   const notes = document.getElementById('generalNotes').value;
 
-  // Title
-  doc.setFontSize(18);
-  doc.setFont('helvetica', 'bold');
-  doc.text('APK Checklist', 14, 18);
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(100);
-  doc.text('Personenauto / N1', 14, 24);
+  let html = '<div class="print-page">';
+  html += '<h1>APK Checklist</h1>';
+  html += '<div class="p-sub">Personenauto / N1 &mdash; ' + datum + '</div>';
+  html += '<div class="p-info">';
+  html += '<span><b>Kenteken:</b> ' + kenteken + '</span>';
+  html += '<span><b>Meldcode:</b> ' + meldcode + '</span>';
+  html += '<span><b>KM-stand:</b> ' + km + '</span>';
+  html += '<span><b>Brandstof:</b> ' + brandstof + '</span>';
+  html += '</div>';
 
-  // Vehicle info
-  doc.setTextColor(0);
-  doc.setFontSize(10);
-  let y = 32;
-  doc.setFont('helvetica', 'bold');
-  doc.text('Kenteken:', 14, y);
-  doc.setFont('helvetica', 'normal');
-  doc.text(kenteken, 40, y);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Meldcode:', 80, y);
-  doc.setFont('helvetica', 'normal');
-  doc.text(meldcode, 106, y);
-  y += 6;
-  doc.setFont('helvetica', 'bold');
-  doc.text('KM-stand:', 14, y);
-  doc.setFont('helvetica', 'normal');
-  doc.text(String(km), 40, y);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Brandstof:', 80, y);
-  doc.setFont('helvetica', 'normal');
-  doc.text(brandstof, 106, y);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Datum:', 140, y);
-  doc.setFont('helvetica', 'normal');
-  doc.text(datum, 158, y);
-  y += 4;
+  checklistData.forEach(function(section, si) {
+    var hasSides = section.items.some(function(i) { return i.sides; });
+    html += '<h2>' + (si+1) + '. ' + section.title + '</h2>';
+    html += '<table><tr><th style="width:40px">Status</th><th>Controlepunt</th>';
+    if (hasSides) html += '<th style="width:80px">Zijde</th>';
+    html += '<th>Opmerking</th></tr>';
 
-  // Line
-  doc.setDrawColor(200);
-  doc.line(14, y, pageW - 14, y);
-  y += 4;
+    section.items.forEach(function(item, ii) {
+      var state = itemStates[si][ii];
+      var statusTxt = state.status === 'ok' ? '<span class="s-ok">OK</span>'
+        : state.status === 'fail' ? '<span class="s-fail">FOUT</span>'
+        : state.status === 'na' ? '<span class="s-na">N/A</span>' : '-';
 
-  // Sections
-  checklistData.forEach((section, si) => {
-    const hasSides = section.items.some(i => i.sides);
-
-    // Check if we need a new page
-    if (y > 265) { doc.addPage(); y = 14; }
-
-    // Section header
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(0);
-    doc.text(`${si + 1}. ${section.title}`, 14, y);
-    y += 2;
-
-    // Build table data
-    const head = [['Status', 'Controlepunt']];
-    if (hasSides) head[0].push('Zijde');
-    head[0].push('Opmerking');
-
-    const body = section.items.map((item, ii) => {
-      const state = itemStates[si][ii];
-      const status = state.status === 'ok' ? 'OK' : state.status === 'fail' ? 'FOUT' : state.status === 'na' ? 'N/A' : '-';
-
-      const row = [status, item.text];
-
-      if (hasSides) {
-        if (item.sides) {
-          const sidesStr = item.sides.map(s => {
-            const v = state.sides[s];
-            return v === 1 ? s + ':OK' : v === 2 ? s + ':FOUT' : s + ':-';
-          }).join('  ');
-          row.push(sidesStr);
-        } else {
-          row.push('');
-        }
+      var sidesStr = '';
+      if (item.sides) {
+        sidesStr = item.sides.map(function(s) {
+          var v = state.sides[s];
+          return v === 1 ? '<span class="s-ok">' + s + '</span>' : v === 2 ? '<span class="s-fail">' + s + '</span>' : s + ':-';
+        }).join(' &nbsp;');
       }
 
-      row.push(state.remark || '');
-      return row;
+      html += '<tr><td style="text-align:center">' + statusTxt + '</td><td>' + item.text + '</td>';
+      if (hasSides) html += '<td style="font-size:8px">' + sidesStr + '</td>';
+      html += '<td>' + (state.remark || '') + '</td></tr>';
     });
-
-    const colStyles = { 0: { cellWidth: 16, halign: 'center' } };
-    if (hasSides) {
-      colStyles[2] = { cellWidth: 36, fontSize: 7 };
-    }
-
-    doc.autoTable({
-      startY: y,
-      head: head,
-      body: body,
-      margin: { left: 14, right: 14 },
-      styles: { fontSize: 8, cellPadding: 2, textColor: [0,0,0], lineColor: [200,200,200], lineWidth: 0.3 },
-      headStyles: { fillColor: [240,240,240], textColor: [0,0,0], fontStyle: 'bold' },
-      columnStyles: colStyles,
-      didParseCell: function(data) {
-        if (data.section === 'body' && data.column.index === 0) {
-          const val = data.cell.raw;
-          if (val === 'OK') { data.cell.styles.textColor = [22, 163, 74]; data.cell.styles.fontStyle = 'bold'; }
-          else if (val === 'FOUT') { data.cell.styles.textColor = [220, 38, 38]; data.cell.styles.fontStyle = 'bold'; }
-          else if (val === 'N/A') { data.cell.styles.textColor = [120, 120, 120]; }
-        }
-      }
-    });
-
-    y = doc.lastAutoTable.finalY + 6;
+    html += '</table>';
   });
 
-  // Notes
   if (notes) {
-    if (y > 250) { doc.addPage(); y = 14; }
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Opmerkingen / Afkeurpunten', 14, y);
-    y += 5;
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    const lines = doc.splitTextToSize(notes, pageW - 28);
-    doc.text(lines, 14, y);
-    y += lines.length * 4 + 4;
+    html += '<h2>Opmerkingen / Afkeurpunten</h2>';
+    html += '<div class="p-notes">' + notes.replace(/\n/g, '<br>') + '</div>';
   }
 
-  // Summary
-  if (y > 260) { doc.addPage(); y = 14; }
-  const totalItems = itemStates.flat().length;
-  const okCount = itemStates.flat().filter(i => i.status === 'ok').length;
-  const failCount = itemStates.flat().filter(i => i.status === 'fail').length;
-  const naCount = itemStates.flat().filter(i => i.status === 'na').length;
-  const unchecked = totalItems - okCount - failCount - naCount;
+  var all = itemStates.flat();
+  var okC = all.filter(function(i){return i.status==='ok'}).length;
+  var failC = all.filter(function(i){return i.status==='fail'}).length;
+  var naC = all.filter(function(i){return i.status==='na'}).length;
+  var unc = all.length - okC - failC - naC;
 
-  doc.setDrawColor(200);
-  doc.roundedRect(14, y, pageW - 28, 10, 2, 2);
-  y += 6;
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'bold');
-  doc.text(`Samenvatting:  ${okCount} goedgekeurd  |  ${failCount} afgekeurd  |  ${naCount} n.v.t.  |  ${unchecked} niet ingevuld`, 18, y);
+  html += '<div class="p-summary"><b>Samenvatting:</b> ' + okC + ' goedgekeurd &middot; ' + failC + ' afgekeurd &middot; ' + naC + ' n.v.t. &middot; ' + unc + ' niet ingevuld</div>';
+  html += '</div>';
 
-  const filename = `APK_${kenteken.replace(/[^a-zA-Z0-9]/g, '')}_${datum}.pdf`;
-  doc.save(filename);
+  // Open print window
+  var win = window.open('', '_blank');
+  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>APK ' + kenteken + ' ' + datum + '</title>');
+  win.document.write('<style>');
+  win.document.write('body{margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#000}');
+  win.document.write('.print-page{padding:15mm 12mm;max-width:210mm}');
+  win.document.write('h1{font-size:18px;margin:0 0 2px}');
+  win.document.write('.p-sub{font-size:10px;color:#555;margin-bottom:8px}');
+  win.document.write('.p-info{margin-bottom:10px}.p-info span{margin-right:18px}.p-info b{margin-right:2px}');
+  win.document.write('h2{font-size:12px;margin:10px 0 3px;padding-bottom:2px;border-bottom:1px solid #999}');
+  win.document.write('table{width:100%;border-collapse:collapse;margin-bottom:6px}');
+  win.document.write('th,td{border:1px solid #bbb;padding:3px 5px;text-align:left;font-size:9px}');
+  win.document.write('th{background:#e8e8e8;font-weight:bold}');
+  win.document.write('.s-ok{color:#16a34a;font-weight:bold}');
+  win.document.write('.s-fail{color:#dc2626;font-weight:bold}');
+  win.document.write('.s-na{color:#888}');
+  win.document.write('.p-notes{margin-top:6px;padding:6px;border:1px solid #bbb;border-radius:3px;white-space:pre-wrap;font-size:10px}');
+  win.document.write('.p-summary{margin-top:8px;padding:6px;border:1px solid #bbb;border-radius:3px;font-size:10px}');
+  win.document.write('@media print{body{margin:0}@page{size:A4;margin:10mm}}');
+  win.document.write('</style></head><body>');
+  win.document.write(html);
+  win.document.write('</body></html>');
+  win.document.close();
+  setTimeout(function(){ win.print(); }, 400);
 }
 
 // Init
