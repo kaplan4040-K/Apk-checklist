@@ -190,6 +190,54 @@
   .summary-alert.warn { background: #fef3c7; border: 1px solid #f59e0b; color: #92400e; }
   .summary-alert.danger { background: #fee2e2; border: 1px solid #ef4444; color: #991b1b; }
 
+  .apk-verdict {
+    margin: 0 12px 8px;
+    padding: 14px 16px;
+    border-radius: var(--radius);
+    font-size: 15px;
+    font-weight: 700;
+    text-align: center;
+    display: none;
+  }
+  .apk-verdict.show { display: block; }
+  .apk-verdict.blocked {
+    background: #fee2e2;
+    border: 2px solid #dc2626;
+    color: #991b1b;
+  }
+  .apk-verdict.blocked .verdict-sub {
+    font-size: 12px;
+    font-weight: 400;
+    margin-top: 4px;
+    color: #b91c1c;
+  }
+  .apk-verdict.passed {
+    background: #dcfce7;
+    border: 2px solid #16a34a;
+    color: #166534;
+  }
+  .apk-verdict.advisory {
+    background: #fef3c7;
+    border: 2px solid #f59e0b;
+    color: #92400e;
+  }
+  .apk-verdict.advisory .verdict-sub {
+    font-size: 12px;
+    font-weight: 400;
+    margin-top: 4px;
+  }
+
+  .check-item.blocked { opacity: 0.5; pointer-events: none; position: relative; }
+  .check-item .blocked-msg {
+    font-size: 11px;
+    color: #991b1b;
+    background: #fee2e2;
+    padding: 4px 8px;
+    border-radius: 4px;
+    margin-left: 48px;
+    margin-top: 2px;
+  }
+
   /* Aandachtspunten blok */
   .attention-card {
     background: var(--card);
@@ -498,6 +546,8 @@
   <textarea id="generalNotes" placeholder="Aanvullende opmerkingen..."></textarea>
 </div>
 
+<div class="apk-verdict" id="apkVerdict"></div>
+
 <div class="summary-bar" id="summaryBar">
   <h3>Samenvatting</h3>
   <div class="summary-counts" id="summaryCounts"></div>
@@ -762,8 +812,16 @@ function updateBadge(si) {
 }
 
 function updateProgress() {
-  const total = itemStates.flat().length;
-  const done = itemStates.flat().filter(i => i.status !== 'none').length;
+  // Alleen secties 1-10 tellen voor voortgang
+  const acI = checklistData.findIndex(function(s){ return s.title.indexOf('Adviespunten') !== -1; });
+  const raI = checklistData.findIndex(function(s){ return s.title.indexOf('Reparatie') !== -1; });
+  const mainItems = [];
+  itemStates.forEach(function(section, si) {
+    if (si === acI || si === raI) return;
+    section.forEach(function(item) { mainItems.push(item); });
+  });
+  const total = mainItems.length;
+  const done = mainItems.filter(function(i){ return i.status !== 'none'; }).length;
   document.getElementById('progressFill').style.width = `${(done / total * 100)}%`;
 }
 
@@ -842,8 +900,11 @@ function doLookup() {
       const apkVervaldatum = v.vervaldatum_apk ?
         v.vervaldatum_apk.substring(6,8) + '-' + v.vervaldatum_apk.substring(4,6) + '-' + v.vervaldatum_apk.substring(0,4) : '-';
 
+      // Datum eerste toelating als volledig getal (YYYYMMDD)
+      const det = v.datum_eerste_toelating || '';
+
       // Save for PDF
-      rdwData = { merk: merk, model: model, bouwjaar: bouwjaar, brandstof: brandstof, kleur: kleur, apkVervaldatum: apkVervaldatum };
+      rdwData = { merk: merk, model: model, bouwjaar: bouwjaar, brandstof: brandstof, kleur: kleur, apkVervaldatum: apkVervaldatum, datumEersteToelating: det };
 
       // Auto-fill brandstof
       const bsSelect = document.getElementById('v-brandstof');
@@ -884,6 +945,9 @@ function doLookup() {
 
       // Show common failure points
       showAttentionPoints(merk, model, parseInt(bouwjaar));
+
+      // Blokkeer RA-items voor auto's vanaf 01-01-2018
+      applyRABlocking(det);
     })
     .catch(function() {
       content.innerHTML = '<div class="vc-error">Fout bij opzoeken. Controleer je internetverbinding.</div>';
@@ -1115,21 +1179,85 @@ function showAttentionPoints(merk, model, bouwjaar) {
   if (rdwData) rdwData.attentionPoints = points;
 }
 
+// RA-blokkering op basis van datum eerste toelating
+// RA1 (airbag), RA3 (ESP), RA4 (TPMS), RA5 (stuurbekrachtiging), RA6 (ABS)
+// zijn alleen reparatieadviespunt voor auto's VÓÓR 01-01-2018.
+// Vanaf 01-01-2018 zijn het afkeurpunten en mogen ze NIET als RA genoteerd worden.
+const raBlockRules = [
+  { raText: 'RA1', reason: 'Airbag/gordelsysteem defect is een afkeurpunt voor voertuigen vanaf 01-01-2018' },
+  { raText: 'RA3', reason: 'ESP/ESC defect is een afkeurpunt voor voertuigen vanaf 01-01-2018' },
+  { raText: 'RA4', reason: 'TPMS defect is een afkeurpunt voor voertuigen vanaf 01-01-2018' },
+  { raText: 'RA5', reason: 'Elektronische stuurbekrachtiging defect is een afkeurpunt voor voertuigen vanaf 01-01-2018' },
+  { raText: 'RA6', reason: 'ABS/elektronisch remsysteem defect is een afkeurpunt voor voertuigen vanaf 01-01-2018' },
+];
+
+function applyRABlocking(datumEersteToelating) {
+  const raIndex = checklistData.findIndex(function(s){ return s.title.indexOf('Reparatie') !== -1; });
+  if (raIndex < 0) return;
+
+  // Bepaal of auto vanaf 2018 is
+  const isNieuw = datumEersteToelating && parseInt(datumEersteToelating.substring(0,8)) >= 20180101;
+
+  const sectionBody = document.getElementById('body-' + raIndex);
+  if (!sectionBody) return;
+  const checkItems = sectionBody.querySelectorAll('.check-item');
+
+  checklistData[raIndex].items.forEach(function(item, idx) {
+    const checkItem = checkItems[idx];
+    if (!checkItem) return;
+
+    // Verwijder eerdere blokkering
+    checkItem.classList.remove('blocked');
+    const oldMsg = checkItem.querySelector('.blocked-msg');
+    if (oldMsg) oldMsg.remove();
+
+    if (isNieuw) {
+      // Check of dit RA-item geblokkeerd moet worden
+      const rule = raBlockRules.find(function(r) { return item.text.indexOf(r.raText) !== -1; });
+      if (rule) {
+        checkItem.classList.add('blocked');
+        // Reset status als die al was ingevuld
+        itemStates[raIndex][idx].status = 'none';
+        updateBtn(raIndex, idx);
+
+        const msg = document.createElement('div');
+        msg.className = 'blocked-msg';
+        msg.textContent = '✗ ' + rule.reason;
+        checkItem.appendChild(msg);
+      }
+    }
+  });
+
+  updateBadge(raIndex);
+  updateProgress();
+  updateSummary();
+}
+
 // Summary update
 function updateSummary() {
   const bar = document.getElementById('summaryBar');
   const counts = document.getElementById('summaryCounts');
   const alerts = document.getElementById('summaryAlerts');
 
+  const acIndex = checklistData.findIndex(function(s){ return s.title.indexOf('Adviespunten') !== -1; });
+  const raIndex = checklistData.findIndex(function(s){ return s.title.indexOf('Reparatie') !== -1; });
+
+  // Alleen secties 1-10 meetellen (niet AC/RA)
+  const mainItems = [];
+  itemStates.forEach(function(section, si) {
+    if (si === acIndex || si === raIndex) return;
+    section.forEach(function(item) { mainItems.push(item); });
+  });
+
   const all = itemStates.flat();
   const anyFilled = all.some(function(i){ return i.status !== 'none'; });
   if (!anyFilled) { bar.classList.remove('show'); return; }
   bar.classList.add('show');
 
-  const okC = all.filter(function(i){return i.status==='ok'}).length;
-  const failC = all.filter(function(i){return i.status==='fail'}).length;
-  const naC = all.filter(function(i){return i.status==='na'}).length;
-  const unc = all.length - okC - failC - naC;
+  const okC = mainItems.filter(function(i){return i.status==='ok'}).length;
+  const failC = mainItems.filter(function(i){return i.status==='fail'}).length;
+  const naC = mainItems.filter(function(i){return i.status==='na'}).length;
+  const unc = mainItems.length - okC - failC - naC;
 
   counts.innerHTML = '<span class="sc-ok">' + okC + ' goedgekeurd</span>' +
     '<span class="sc-fail">' + failC + ' afgekeurd</span>' +
@@ -1138,8 +1266,6 @@ function updateSummary() {
 
   // Afkeurpunten per sectie
   let alertHtml = '';
-  const acIndex = checklistData.findIndex(function(s){ return s.title.indexOf('Adviespunten') !== -1; });
-  const raIndex = checklistData.findIndex(function(s){ return s.title.indexOf('Reparatie') !== -1; });
 
   // Per sectie afgekeurde items tonen
   checklistData.forEach(function(section, si) {
@@ -1182,6 +1308,36 @@ function updateSummary() {
   }
 
   alerts.innerHTML = alertHtml;
+
+  // APK Verdict blok
+  const verdict = document.getElementById('apkVerdict');
+  const hasRA = (raIndex >= 0) && itemStates[raIndex].some(function(i){ return i.status === 'ok' || i.status === 'fail'; });
+  const hasAC = (acIndex >= 0) && itemStates[acIndex].some(function(i){ return i.status === 'ok' || i.status === 'fail'; });
+  const hasMainFail = failC > 0;
+
+  if (hasRA || hasMainFail) {
+    verdict.className = 'apk-verdict show blocked';
+    let reasons = [];
+    if (hasMainFail) reasons.push(failC + ' afkeurpunt(en) bij keuring');
+    if (hasRA) {
+      const raNames = [];
+      itemStates[raIndex].forEach(function(item, idx) {
+        if (item.status === 'ok' || item.status === 'fail') raNames.push(checklistData[raIndex].items[idx].text);
+      });
+      reasons.push('Reparatie-advies: ' + raNames.join(', '));
+    }
+    verdict.innerHTML = '✗ APK AFMELDING ALS GOEDGEKEURD IS NIET MOGELIJK' +
+      '<div class="verdict-sub">' + reasons.join('<br>') + '</div>';
+  } else if (hasAC) {
+    verdict.className = 'apk-verdict show advisory';
+    verdict.innerHTML = '⚠ APK GOEDGEKEURD — MET ADVIESPUNTEN' +
+      '<div class="verdict-sub">Auto kan worden afgemeld, adviespunten worden genoteerd.</div>';
+  } else if (okC > 0 && failC === 0 && unc === 0) {
+    verdict.className = 'apk-verdict show passed';
+    verdict.innerHTML = '✓ APK GOEDGEKEURD';
+  } else {
+    verdict.classList.remove('show');
+  }
 }
 
 function resetAll() {
@@ -1191,6 +1347,13 @@ function resetAll() {
   document.getElementById('vehicleCard').classList.remove('show');
   document.getElementById('attentionCard').classList.remove('show');
   document.getElementById('summaryBar').classList.remove('show');
+  document.getElementById('apkVerdict').classList.remove('show');
+  // Verwijder RA-blokkeringen
+  document.querySelectorAll('.check-item.blocked').forEach(function(el) {
+    el.classList.remove('blocked');
+    var msg = el.querySelector('.blocked-msg');
+    if (msg) msg.remove();
+  });
   rdwData = null;
   initState();
   buildChecklist();
@@ -1269,18 +1432,22 @@ function exportPDF() {
     html += '<div class="p-notes">' + notes.replace(/\n/g, '<br>') + '</div>';
   }
 
-  var all = itemStates.flat();
-  var okC = all.filter(function(i){return i.status==='ok'}).length;
-  var failC = all.filter(function(i){return i.status==='fail'}).length;
-  var naC = all.filter(function(i){return i.status==='na'}).length;
-  var unc = all.length - okC - failC - naC;
+  // Alleen secties 1-10 meetellen (niet AC/RA)
+  var acIdx = checklistData.findIndex(function(s){ return s.title.indexOf('Adviespunten') !== -1; });
+  var raIdx = checklistData.findIndex(function(s){ return s.title.indexOf('Reparatie') !== -1; });
+  var mainPdf = [];
+  itemStates.forEach(function(section, si) {
+    if (si === acIdx || si === raIdx) return;
+    section.forEach(function(item) { mainPdf.push(item); });
+  });
+  var okC = mainPdf.filter(function(i){return i.status==='ok'}).length;
+  var failC = mainPdf.filter(function(i){return i.status==='fail'}).length;
+  var naC = mainPdf.filter(function(i){return i.status==='na'}).length;
+  var unc = mainPdf.length - okC - failC - naC;
 
   html += '<div class="p-summary"><b>Samenvatting:</b> ' + okC + ' goedgekeurd &middot; ' + failC + ' afgekeurd &middot; ' + naC + ' n.v.t. &middot; ' + unc + ' niet ingevuld</div>';
 
   // Afkeurpunten per sectie in PDF
-  var acIdx = checklistData.findIndex(function(s){ return s.title.indexOf('Adviespunten') !== -1; });
-  var raIdx = checklistData.findIndex(function(s){ return s.title.indexOf('Reparatie') !== -1; });
-
   checklistData.forEach(function(section, si) {
     if (si === acIdx || si === raIdx) return;
     var failItems = [];
@@ -1309,6 +1476,17 @@ function exportPDF() {
     if (raList.length > 0) {
       html += '<div style="margin-top:6px;padding:6px;border:2px solid #ef4444;border-radius:3px;background:#fef2f2;font-size:10px"><b>🔴 Reparatie-adviezen (' + raList.length + '):</b><br>' + raList.join('<br>') + '</div>';
     }
+  }
+
+  // APK Verdict in PDF
+  var pdfHasRA = (raIdx >= 0) && itemStates[raIdx].some(function(i){ return i.status === 'ok' || i.status === 'fail'; });
+  var pdfHasAC = (acIdx >= 0) && itemStates[acIdx].some(function(i){ return i.status === 'ok' || i.status === 'fail'; });
+  if (pdfHasRA || failC > 0) {
+    html += '<div style="margin-top:10px;padding:10px;border:3px solid #dc2626;border-radius:4px;background:#fee2e2;text-align:center;font-size:14px;font-weight:bold;color:#991b1b">✗ APK AFMELDING ALS GOEDGEKEURD IS NIET MOGELIJK</div>';
+  } else if (pdfHasAC) {
+    html += '<div style="margin-top:10px;padding:10px;border:3px solid #f59e0b;border-radius:4px;background:#fef3c7;text-align:center;font-size:14px;font-weight:bold;color:#92400e">⚠ APK GOEDGEKEURD — MET ADVIESPUNTEN</div>';
+  } else if (okC > 0 && failC === 0 && unc === 0) {
+    html += '<div style="margin-top:10px;padding:10px;border:3px solid #16a34a;border-radius:4px;background:#dcfce7;text-align:center;font-size:14px;font-weight:bold;color:#166534">✓ APK GOEDGEKEURD</div>';
   }
 
   html += '</div>';
