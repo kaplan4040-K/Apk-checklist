@@ -7,7 +7,8 @@
 <link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiQVBLIENoZWNrbGlzdCIsInNob3J0X25hbWUiOiJBUEsiLCJzdGFydF91cmwiOiIuIiwiZGlzcGxheSI6InN0YW5kYWxvbmUiLCJiYWNrZ3JvdW5kX2NvbG9yIjoiI2ZmZmZmZiIsInRoZW1lX2NvbG9yIjoiIzFhMWExYSJ9">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#1a1a1a">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -301,32 +302,6 @@
   }
   .btn-pdf:active { background: #1d4ed8; }
 
-  /* PDF styles */
-  .pdf-output {
-    display: none;
-    font-family: Arial, Helvetica, sans-serif;
-    padding: 20px;
-    font-size: 11px;
-    color: #000;
-    max-width: 210mm;
-  }
-  .pdf-output h1 { font-size: 18px; margin-bottom: 4px; }
-  .pdf-output .pdf-subtitle { font-size: 11px; color: #555; margin-bottom: 12px; }
-  .pdf-output .pdf-info { margin-bottom: 12px; }
-  .pdf-output .pdf-info span { display: inline-block; margin-right: 20px; font-size: 11px; }
-  .pdf-output h2 { font-size: 13px; margin: 10px 0 4px; padding: 4px 0; border-bottom: 1px solid #ccc; }
-  .pdf-output table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
-  .pdf-output th, .pdf-output td {
-    border: 1px solid #ccc;
-    padding: 3px 6px;
-    text-align: left;
-    font-size: 10px;
-  }
-  .pdf-output th { background: #f0f0f0; font-weight: 600; }
-  .pdf-output .status-ok { color: #16a34a; font-weight: 700; }
-  .pdf-output .status-fail { color: #dc2626; font-weight: 700; }
-  .pdf-output .status-na { color: #666; }
-  .pdf-output .pdf-notes { margin-top: 10px; padding: 8px; border: 1px solid #ccc; border-radius: 4px; min-height: 40px; font-size: 11px; }
 </style>
 </head>
 <body>
@@ -384,7 +359,6 @@
   <button class="btn-pdf" onclick="exportPDF()">PDF Exporteren</button>
 </div>
 
-<div class="pdf-output" id="pdfOutput"></div>
 
 <script>
 const checklistData = [
@@ -655,6 +629,10 @@ function resetAll() {
 }
 
 function exportPDF() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const pageW = doc.internal.pageSize.getWidth();
+
   const kenteken = document.getElementById('v-kenteken').value || '-';
   const meldcode = document.getElementById('v-meldcode').value || '-';
   const km = document.getElementById('v-km').value || '-';
@@ -662,77 +640,145 @@ function exportPDF() {
   const datum = document.getElementById('v-datum').value || new Date().toISOString().slice(0,10);
   const notes = document.getElementById('generalNotes').value;
 
-  let html = `
-    <h1>APK Checklist \u2014 Personenauto / N1</h1>
-    <div class="pdf-subtitle">Datum: ${datum}</div>
-    <div class="pdf-info">
-      <span><b>Kenteken:</b> ${kenteken}</span>
-      <span><b>Meldcode:</b> ${meldcode}</span>
-      <span><b>KM-stand:</b> ${km}</span>
-      <span><b>Brandstof:</b> ${brandstof}</span>
-    </div>
-  `;
+  // Title
+  doc.setFontSize(18);
+  doc.setFont('helvetica', 'bold');
+  doc.text('APK Checklist', 14, 18);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(100);
+  doc.text('Personenauto / N1', 14, 24);
 
+  // Vehicle info
+  doc.setTextColor(0);
+  doc.setFontSize(10);
+  let y = 32;
+  doc.setFont('helvetica', 'bold');
+  doc.text('Kenteken:', 14, y);
+  doc.setFont('helvetica', 'normal');
+  doc.text(kenteken, 40, y);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Meldcode:', 80, y);
+  doc.setFont('helvetica', 'normal');
+  doc.text(meldcode, 106, y);
+  y += 6;
+  doc.setFont('helvetica', 'bold');
+  doc.text('KM-stand:', 14, y);
+  doc.setFont('helvetica', 'normal');
+  doc.text(String(km), 40, y);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Brandstof:', 80, y);
+  doc.setFont('helvetica', 'normal');
+  doc.text(brandstof, 106, y);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Datum:', 140, y);
+  doc.setFont('helvetica', 'normal');
+  doc.text(datum, 158, y);
+  y += 4;
+
+  // Line
+  doc.setDrawColor(200);
+  doc.line(14, y, pageW - 14, y);
+  y += 4;
+
+  // Sections
   checklistData.forEach((section, si) => {
-    html += `<h2>${si + 1}. ${section.title}</h2><table><tr><th style="width:30px">Status</th><th>Controlepunt</th>`;
     const hasSides = section.items.some(i => i.sides);
-    if (hasSides) {
-      const has4 = section.items.some(i => i.sides && i.sides.length === 4);
-      html += `<th style="width:${has4 ? '90px' : '60px'}">${has4 ? 'RV/LV/RA/LA' : 'R/M/L'}</th>`;
-    }
-    html += '<th>Opmerking</th></tr>';
 
-    section.items.forEach((item, ii) => {
+    // Check if we need a new page
+    if (y > 265) { doc.addPage(); y = 14; }
+
+    // Section header
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(0);
+    doc.text(`${si + 1}. ${section.title}`, 14, y);
+    y += 2;
+
+    // Build table data
+    const head = [['Status', 'Controlepunt']];
+    if (hasSides) head[0].push('Zijde');
+    head[0].push('Opmerking');
+
+    const body = section.items.map((item, ii) => {
       const state = itemStates[si][ii];
-      const statusLabel = state.status === 'ok' ? '<span class="status-ok">\u2713</span>'
-        : state.status === 'fail' ? '<span class="status-fail">\u2717</span>'
-        : state.status === 'na' ? '<span class="status-na">N/A</span>' : '\u2013';
+      const status = state.status === 'ok' ? 'OK' : state.status === 'fail' ? 'FOUT' : state.status === 'na' ? 'N/A' : '-';
 
-      let sidesStr = '';
-      if (item.sides) {
-        sidesStr = item.sides.map(s => {
-          const v = state.sides[s];
-          return v === 1 ? `${s}\u2713` : v === 2 ? `${s}\u2717` : `${s}\u2013`;
-        }).join(' ');
+      const row = [status, item.text];
+
+      if (hasSides) {
+        if (item.sides) {
+          const sidesStr = item.sides.map(s => {
+            const v = state.sides[s];
+            return v === 1 ? s + ':OK' : v === 2 ? s + ':FOUT' : s + ':-';
+          }).join('  ');
+          row.push(sidesStr);
+        } else {
+          row.push('');
+        }
       }
 
-      html += `<tr><td style="text-align:center">${statusLabel}</td><td>${item.text}</td>`;
-      if (hasSides) html += `<td style="font-size:9px">${sidesStr}</td>`;
-      html += `<td>${state.remark || ''}</td></tr>`;
+      row.push(state.remark || '');
+      return row;
     });
-    html += '</table>';
+
+    const colStyles = { 0: { cellWidth: 16, halign: 'center' } };
+    if (hasSides) {
+      colStyles[2] = { cellWidth: 36, fontSize: 7 };
+    }
+
+    doc.autoTable({
+      startY: y,
+      head: head,
+      body: body,
+      margin: { left: 14, right: 14 },
+      styles: { fontSize: 8, cellPadding: 2, textColor: [0,0,0], lineColor: [200,200,200], lineWidth: 0.3 },
+      headStyles: { fillColor: [240,240,240], textColor: [0,0,0], fontStyle: 'bold' },
+      columnStyles: colStyles,
+      didParseCell: function(data) {
+        if (data.section === 'body' && data.column.index === 0) {
+          const val = data.cell.raw;
+          if (val === 'OK') { data.cell.styles.textColor = [22, 163, 74]; data.cell.styles.fontStyle = 'bold'; }
+          else if (val === 'FOUT') { data.cell.styles.textColor = [220, 38, 38]; data.cell.styles.fontStyle = 'bold'; }
+          else if (val === 'N/A') { data.cell.styles.textColor = [120, 120, 120]; }
+        }
+      }
+    });
+
+    y = doc.lastAutoTable.finalY + 6;
   });
 
+  // Notes
   if (notes) {
-    html += `<h2>Opmerkingen / Afkeurpunten</h2><div class="pdf-notes">${notes.replace(/\n/g, '<br>')}</div>`;
+    if (y > 250) { doc.addPage(); y = 14; }
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Opmerkingen / Afkeurpunten', 14, y);
+    y += 5;
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    const lines = doc.splitTextToSize(notes, pageW - 28);
+    doc.text(lines, 14, y);
+    y += lines.length * 4 + 4;
   }
 
   // Summary
+  if (y > 260) { doc.addPage(); y = 14; }
   const totalItems = itemStates.flat().length;
   const okCount = itemStates.flat().filter(i => i.status === 'ok').length;
   const failCount = itemStates.flat().filter(i => i.status === 'fail').length;
   const naCount = itemStates.flat().filter(i => i.status === 'na').length;
   const unchecked = totalItems - okCount - failCount - naCount;
 
-  html += `<div style="margin-top:12px;padding:8px;border:1px solid #ccc;border-radius:4px;font-size:11px">
-    <b>Samenvatting:</b> ${okCount} goedgekeurd \u00b7 ${failCount} afgekeurd \u00b7 ${naCount} n.v.t. \u00b7 ${unchecked} niet ingevuld
-  </div>`;
-
-  const pdfEl = document.getElementById('pdfOutput');
-  pdfEl.innerHTML = html;
-  pdfEl.style.display = 'block';
+  doc.setDrawColor(200);
+  doc.roundedRect(14, y, pageW - 28, 10, 2, 2);
+  y += 6;
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.text(`Samenvatting:  ${okCount} goedgekeurd  |  ${failCount} afgekeurd  |  ${naCount} n.v.t.  |  ${unchecked} niet ingevuld`, 18, y);
 
   const filename = `APK_${kenteken.replace(/[^a-zA-Z0-9]/g, '')}_${datum}.pdf`;
-
-  html2pdf().set({
-    margin: [8, 10, 8, 10],
-    filename: filename,
-    html2canvas: { scale: 2, useCORS: true },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-    pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-  }).from(pdfEl).save().then(() => {
-    pdfEl.style.display = 'none';
-  });
+  doc.save(filename);
 }
 
 // Init
