@@ -1048,25 +1048,39 @@ function showAttentionPoints(merk, model, bouwjaar) {
   const list = document.getElementById('attentionList');
   const points = [];
 
-  const merkUpper = merk.toUpperCase();
-  const modelUpper = model.toUpperCase();
+  const merkUpper = (merk || '').toUpperCase().trim();
+  const modelUpper = (model || '').toUpperCase().trim();
 
-  // Merk-specifieke punten
-  if (commonFailures[merkUpper]) {
-    const merkData = commonFailures[merkUpper];
+  console.log('APK aandachtspunten zoeken voor:', merkUpper, modelUpper, bouwjaar);
+
+  // Zoek merk in database (ook partial match, bv. "VOLKSWAGEN" matched ook als RDW "VOLKSWAG" geeft)
+  let merkData = null;
+  for (const dbMerk in commonFailures) {
+    if (merkUpper.indexOf(dbMerk) !== -1 || dbMerk.indexOf(merkUpper) !== -1) {
+      merkData = commonFailures[dbMerk];
+      console.log('Merk gevonden:', dbMerk);
+      break;
+    }
+  }
+
+  if (merkData) {
     // Zoek model match
     let modelMatch = null;
     if (merkData.models) {
       for (const key in merkData.models) {
+        // Flexibele match: "GOLF VII" bevat "GOLF", "CORSA-E" bevat "CORSA", etc.
         if (modelUpper.indexOf(key) !== -1 || key.indexOf(modelUpper) !== -1) {
           modelMatch = key;
+          console.log('Model gevonden:', key);
           break;
         }
       }
     }
+    // Model-specifieke punten eerst
     if (modelMatch && merkData.models[modelMatch]) {
       merkData.models[modelMatch].forEach(function(p) { points.push(p); });
     }
+    // Merk-algemene punten
     if (merkData.all) {
       merkData.all.forEach(function(p) {
         if (points.indexOf(p) === -1) points.push(p);
@@ -1075,10 +1089,18 @@ function showAttentionPoints(merk, model, bouwjaar) {
   }
 
   // Leeftijdsgerelateerde punten
-  if (bouwjaar && !isNaN(bouwjaar)) {
+  if (bouwjaar && !isNaN(bouwjaar) && bouwjaar > 1980) {
     getAgeIssues(bouwjaar).forEach(function(p) {
       if (points.indexOf(p) === -1) points.push(p);
     });
+  }
+
+  // Altijd iets tonen: als merk onbekend, toon alleen leeftijdspunten
+  if (points.length === 0 && bouwjaar && !isNaN(bouwjaar) && bouwjaar > 1980) {
+    const leeftijd = new Date().getFullYear() - bouwjaar;
+    if (leeftijd >= 4) {
+      points.push('Geen specifieke data voor dit model — controleer standaard slijtpunten extra');
+    }
   }
 
   if (points.length === 0) {
@@ -1090,7 +1112,7 @@ function showAttentionPoints(merk, model, bouwjaar) {
   card.classList.add('show');
 
   // Save for PDF
-  rdwData.attentionPoints = points;
+  if (rdwData) rdwData.attentionPoints = points;
 }
 
 // Summary update
