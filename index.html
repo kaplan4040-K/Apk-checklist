@@ -99,6 +99,97 @@
     box-shadow: 0 0 0 2px rgba(37,99,235,0.15);
   }
 
+  /* NL Kenteken styling */
+  .kenteken-wrap {
+    display: flex;
+    align-items: stretch;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 2px solid #1a1a1a;
+    background: #f6c700;
+    height: 48px;
+  }
+  .kenteken-nl {
+    background: #003da5;
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 2px 6px 4px;
+    min-width: 28px;
+  }
+  .kenteken-nl .nl-stars { font-size: 6px; line-height: 1; }
+  .kenteken-nl .nl-code { font-size: 12px; font-weight: 700; }
+  .kenteken-input {
+    flex: 1;
+    border: none;
+    background: #f6c700;
+    color: #1a1a1a;
+    font-size: 22px;
+    font-weight: 800;
+    font-family: 'Kenteken', 'License Plate', monospace, sans-serif;
+    text-align: center;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 0 10px;
+    outline: none;
+  }
+  .kenteken-input::placeholder { color: #c4a000; font-weight: 400; letter-spacing: 1px; font-size: 16px; }
+
+  /* Vehicle card */
+  .vehicle-card {
+    background: var(--card);
+    margin: 0 12px 12px;
+    padding: 14px 16px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    display: none;
+  }
+  .vehicle-card.show { display: block; }
+  .vehicle-card h3 { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+  .vehicle-card .vc-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 16px;
+    font-size: 13px;
+  }
+  .vehicle-card .vc-grid .vc-label { color: var(--muted); font-size: 11px; }
+  .vehicle-card .vc-grid .vc-val { font-weight: 600; margin-bottom: 4px; }
+  .vehicle-card .vc-loading { color: var(--muted); font-size: 13px; }
+  .vehicle-card .vc-error { color: var(--red); font-size: 13px; }
+
+  /* Summary bar */
+  .summary-bar {
+    margin: 0 12px 12px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    display: none;
+  }
+  .summary-bar.show { display: block; }
+  .summary-bar h3 {
+    font-size: 14px; font-weight: 600; margin-bottom: 8px;
+    color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .summary-counts { display: flex; gap: 12px; flex-wrap: wrap; font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+  .summary-counts .sc-ok { color: var(--green); }
+  .summary-counts .sc-fail { color: var(--red); }
+  .summary-counts .sc-na { color: var(--muted); }
+  .summary-alerts { margin-top: 8px; }
+  .summary-alert {
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .summary-alert.warn { background: #fef3c7; border: 1px solid #f59e0b; color: #92400e; }
+  .summary-alert.danger { background: #fee2e2; border: 1px solid #ef4444; color: #991b1b; }
+
   .section {
     margin: 12px;
   }
@@ -335,11 +426,19 @@
 
 <div class="vehicle-info">
   <h2>Voertuiggegevens</h2>
-  <div class="field-grid">
+  <div class="field-grid full">
     <div class="field">
       <label>Kenteken</label>
-      <input type="text" id="v-kenteken" placeholder="XX-999-X" autocapitalize="characters">
+      <div class="kenteken-wrap">
+        <div class="kenteken-nl">
+          <span class="nl-stars">★★★</span>
+          <span class="nl-code">NL</span>
+        </div>
+        <input type="text" class="kenteken-input" id="v-kenteken" placeholder="XX-000-X" autocapitalize="characters" maxlength="9" oninput="formatKenteken(this); lookupKenteken();">
+      </div>
     </div>
+  </div>
+  <div class="field-grid" style="margin-top:10px">
     <div class="field">
       <label>Meldcode</label>
       <input type="text" id="v-meldcode" placeholder="Meldcode">
@@ -348,6 +447,8 @@
       <label>KM-stand</label>
       <input type="number" id="v-km" placeholder="123456" inputmode="numeric">
     </div>
+  </div>
+  <div class="field-grid" style="margin-top:10px">
     <div class="field">
       <label>Brandstof</label>
       <select id="v-brandstof">
@@ -359,8 +460,6 @@
         <option>Elektrisch</option>
       </select>
     </div>
-  </div>
-  <div class="field-grid full" style="margin-top:10px">
     <div class="field">
       <label>Datum</label>
       <input type="date" id="v-datum">
@@ -368,11 +467,21 @@
   </div>
 </div>
 
+<div class="vehicle-card" id="vehicleCard">
+  <div id="vehicleCardContent"></div>
+</div>
+
 <div id="checklistContainer"></div>
 
 <div class="notes-section">
   <h3>Opmerkingen / Afkeurpunten</h3>
   <textarea id="generalNotes" placeholder="Aanvullende opmerkingen..."></textarea>
+</div>
+
+<div class="summary-bar" id="summaryBar">
+  <h3>Samenvatting</h3>
+  <div class="summary-counts" id="summaryCounts"></div>
+  <div class="summary-alerts" id="summaryAlerts"></div>
 </div>
 
 <div class="bottom-bar">
@@ -578,6 +687,7 @@ function cycleStatus(si, ii) {
   updateBtn(si, ii);
   updateBadge(si);
   updateProgress();
+  updateSummary();
 }
 
 function updateBtn(si, ii) {
@@ -610,6 +720,7 @@ function toggleSide(el) {
   updateBtn(si, ii);
   updateBadge(si);
   updateProgress();
+  updateSummary();
 }
 
 function updateSideChips(si, ii) {
@@ -640,10 +751,168 @@ function toggleSection(si) {
   document.getElementById(`section-${si}`).classList.toggle('open');
 }
 
+// Kenteken formatting
+function formatKenteken(el) {
+  let val = el.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  // Auto-insert dashes based on NL kenteken patterns
+  if (val.length > 6) val = val.substring(0, 6);
+  let formatted = val;
+  if (val.length >= 4) {
+    // Detect pattern and format
+    formatted = formatNLKenteken(val);
+  }
+  el.value = formatted;
+}
+
+function formatNLKenteken(raw) {
+  // NL kenteken sidecodes: determine groups
+  const patterns = [
+    /^([A-Z]{2})(\d{3})([A-Z])$/,      // XX-999-X
+    /^(\d)([A-Z]{3})(\d{2})$/,          // 9-XXX-99
+    /^([A-Z])(\d{3})([A-Z]{2})$/,       // X-999-XX
+    /^([A-Z]{2})(\d{3})([A-Z]{2})$/,    // XX-999-XX (old but exists)
+    /^(\d{2})([A-Z]{3})(\d)$/,          // 99-XXX-9
+    /^(\d{2})([A-Z]{2})(\d{2})$/,       // 99-XX-99
+    /^([A-Z]{2})(\d{2})([A-Z]{2})$/,    // XX-99-XX
+    /^(\d{2})(\d{2})([A-Z]{2})$/,       // 99-99-XX
+    /^([A-Z]{2})(\d{2})(\d{2})$/,       // XX-99-99
+    /^(\d{3})([A-Z]{2})(\d)$/,          // 999-XX-9
+    /^([A-Z]{3})(\d{2})([A-Z])$/,       // XXX-99-X
+  ];
+  for (const p of patterns) {
+    const m = raw.match(p);
+    if (m) return m[1] + '-' + m[2] + '-' + m[3];
+  }
+  return raw;
+}
+
+// RDW Kenteken lookup
+let lookupTimer = null;
+function lookupKenteken() {
+  clearTimeout(lookupTimer);
+  lookupTimer = setTimeout(doLookup, 600);
+}
+
+function doLookup() {
+  const raw = document.getElementById('v-kenteken').value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const card = document.getElementById('vehicleCard');
+  const content = document.getElementById('vehicleCardContent');
+
+  if (raw.length < 5) { card.classList.remove('show'); return; }
+
+  card.classList.add('show');
+  content.innerHTML = '<div class="vc-loading">Voertuig opzoeken...</div>';
+
+  // RDW OpenData API
+  fetch('https://opendata.rdw.nl/resource/m9d7-ebf2.json?kenteken=' + raw)
+    .then(r => r.json())
+    .then(data => {
+      if (!data || data.length === 0) {
+        content.innerHTML = '<div class="vc-error">Kenteken niet gevonden</div>';
+        return;
+      }
+      const v = data[0];
+      const merk = v.merk || '-';
+      const model = v.handelsbenaming || '-';
+      const bouwjaar = v.datum_eerste_toelating ? v.datum_eerste_toelating.substring(0,4) : '-';
+      const brandstof = v.brandstof_omschrijving || '-';
+      const kleur = v.eerste_kleur || '-';
+      const apkVervaldatum = v.vervaldatum_apk ?
+        v.vervaldatum_apk.substring(6,8) + '-' + v.vervaldatum_apk.substring(4,6) + '-' + v.vervaldatum_apk.substring(0,4) : '-';
+
+      // Auto-fill brandstof
+      const bsSelect = document.getElementById('v-brandstof');
+      const bsMap = {'Benzine':'Benzine','Diesel':'Diesel','LPG':'LPG','Elektriciteit':'Elektrisch'};
+      const mappedBs = bsMap[brandstof] || '';
+      if (mappedBs) {
+        for (let i = 0; i < bsSelect.options.length; i++) {
+          if (bsSelect.options[i].value === mappedBs) { bsSelect.selectedIndex = i; break; }
+        }
+      }
+
+      content.innerHTML = '<h3>' + merk + ' ' + model + '</h3>' +
+        '<div class="vc-grid">' +
+          '<div><div class="vc-label">Bouwjaar</div><div class="vc-val">' + bouwjaar + '</div></div>' +
+          '<div><div class="vc-label">Brandstof</div><div class="vc-val">' + brandstof + '</div></div>' +
+          '<div><div class="vc-label">Kleur</div><div class="vc-val">' + kleur + '</div></div>' +
+          '<div><div class="vc-label">APK vervalt</div><div class="vc-val">' + apkVervaldatum + '</div></div>' +
+        '</div>';
+
+      // Also fetch APK history for last km
+      fetch('https://opendata.rdw.nl/resource/sgfe-77wx.json?kenteken=' + raw + '&$order=datum_tenaamstelling_dt DESC&$limit=1')
+        .then(r2 => r2.json())
+        .then(apkData => {
+          if (apkData && apkData.length > 0 && apkData[0].meldcode_toelichting) {
+            // add meldcode info if available
+          }
+        }).catch(function(){});
+    })
+    .catch(function() {
+      content.innerHTML = '<div class="vc-error">Fout bij opzoeken. Controleer je internetverbinding.</div>';
+    });
+}
+
+// Summary update
+function updateSummary() {
+  const bar = document.getElementById('summaryBar');
+  const counts = document.getElementById('summaryCounts');
+  const alerts = document.getElementById('summaryAlerts');
+
+  const all = itemStates.flat();
+  const anyFilled = all.some(function(i){ return i.status !== 'none'; });
+  if (!anyFilled) { bar.classList.remove('show'); return; }
+  bar.classList.add('show');
+
+  const okC = all.filter(function(i){return i.status==='ok'}).length;
+  const failC = all.filter(function(i){return i.status==='fail'}).length;
+  const naC = all.filter(function(i){return i.status==='na'}).length;
+  const unc = all.length - okC - failC - naC;
+
+  counts.innerHTML = '<span class="sc-ok">' + okC + ' goedgekeurd</span>' +
+    '<span class="sc-fail">' + failC + ' afgekeurd</span>' +
+    '<span class="sc-na">' + naC + ' n.v.t.</span>' +
+    '<span>' + unc + ' open</span>';
+
+  // Check adviespunten (section index 10) and reparatie-adviezen (section index 11)
+  let alertHtml = '';
+  const acIndex = checklistData.findIndex(function(s){ return s.title.indexOf('Adviespunten') !== -1; });
+  const raIndex = checklistData.findIndex(function(s){ return s.title.indexOf('Reparatie') !== -1; });
+
+  if (acIndex >= 0) {
+    const acItems = itemStates[acIndex];
+    const acChecked = [];
+    acItems.forEach(function(item, idx) {
+      if (item.status === 'ok' || item.status === 'fail') {
+        acChecked.push(checklistData[acIndex].items[idx].text);
+      }
+    });
+    if (acChecked.length > 0) {
+      alertHtml += '<div class="summary-alert warn"><div><strong>⚠ Adviespunten (' + acChecked.length + ')</strong><br>' + acChecked.join('<br>') + '</div></div>';
+    }
+  }
+
+  if (raIndex >= 0) {
+    const raItems = itemStates[raIndex];
+    const raChecked = [];
+    raItems.forEach(function(item, idx) {
+      if (item.status === 'ok' || item.status === 'fail') {
+        raChecked.push(checklistData[raIndex].items[idx].text);
+      }
+    });
+    if (raChecked.length > 0) {
+      alertHtml += '<div class="summary-alert danger"><div><strong>🔴 Reparatie-adviezen (' + raChecked.length + ')</strong><br>' + raChecked.join('<br>') + '</div></div>';
+    }
+  }
+
+  alerts.innerHTML = alertHtml;
+}
+
 function resetAll() {
   if (!confirm('Weet je zeker dat je alles wilt resetten?')) return;
   document.querySelectorAll('.vehicle-info input, .vehicle-info select').forEach(el => el.value = '');
   document.getElementById('generalNotes').value = '';
+  document.getElementById('vehicleCard').classList.remove('show');
+  document.getElementById('summaryBar').classList.remove('show');
   initState();
   buildChecklist();
   updateProgress();
@@ -666,6 +935,12 @@ function exportPDF() {
   html += '<span><b>KM-stand:</b> ' + km + '</span>';
   html += '<span><b>Brandstof:</b> ' + brandstof + '</span>';
   html += '</div>';
+
+  // Add vehicle info if looked up
+  var vcTitle = document.querySelector('#vehicleCardContent h3');
+  if (vcTitle) {
+    html += '<div style="padding:5px 8px;background:#f0f0f0;border-radius:3px;font-size:11px;margin-bottom:8px"><b>Voertuig:</b> ' + vcTitle.textContent + '</div>';
+  }
 
   checklistData.forEach(function(section, si) {
     var hasSides = section.items.some(function(i) { return i.sides; });
@@ -707,6 +982,29 @@ function exportPDF() {
   var unc = all.length - okC - failC - naC;
 
   html += '<div class="p-summary"><b>Samenvatting:</b> ' + okC + ' goedgekeurd &middot; ' + failC + ' afgekeurd &middot; ' + naC + ' n.v.t. &middot; ' + unc + ' niet ingevuld</div>';
+
+  // Adviespunten & reparatie in PDF
+  var acIdx = checklistData.findIndex(function(s){ return s.title.indexOf('Adviespunten') !== -1; });
+  var raIdx = checklistData.findIndex(function(s){ return s.title.indexOf('Reparatie') !== -1; });
+  if (acIdx >= 0) {
+    var acList = [];
+    itemStates[acIdx].forEach(function(item, idx) {
+      if (item.status === 'ok' || item.status === 'fail') acList.push(checklistData[acIdx].items[idx].text);
+    });
+    if (acList.length > 0) {
+      html += '<div style="margin-top:6px;padding:6px;border:2px solid #f59e0b;border-radius:3px;background:#fef9e7;font-size:10px"><b>⚠ Adviespunten (' + acList.length + '):</b><br>' + acList.join('<br>') + '</div>';
+    }
+  }
+  if (raIdx >= 0) {
+    var raList = [];
+    itemStates[raIdx].forEach(function(item, idx) {
+      if (item.status === 'ok' || item.status === 'fail') raList.push(checklistData[raIdx].items[idx].text);
+    });
+    if (raList.length > 0) {
+      html += '<div style="margin-top:6px;padding:6px;border:2px solid #ef4444;border-radius:3px;background:#fef2f2;font-size:10px"><b>🔴 Reparatie-adviezen (' + raList.length + '):</b><br>' + raList.join('<br>') + '</div>';
+    }
+  }
+
   html += '</div>';
 
   // Open print window
