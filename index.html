@@ -788,6 +788,7 @@ function formatNLKenteken(raw) {
 
 // RDW Kenteken lookup
 let lookupTimer = null;
+let rdwData = null; // store RDW vehicle data for PDF
 function lookupKenteken() {
   clearTimeout(lookupTimer);
   lookupTimer = setTimeout(doLookup, 600);
@@ -809,6 +810,7 @@ function doLookup() {
     .then(data => {
       if (!data || data.length === 0) {
         content.innerHTML = '<div class="vc-error">Kenteken niet gevonden</div>';
+        rdwData = null;
         return;
       }
       const v = data[0];
@@ -819,6 +821,9 @@ function doLookup() {
       const kleur = v.eerste_kleur || '-';
       const apkVervaldatum = v.vervaldatum_apk ?
         v.vervaldatum_apk.substring(6,8) + '-' + v.vervaldatum_apk.substring(4,6) + '-' + v.vervaldatum_apk.substring(0,4) : '-';
+
+      // Save for PDF
+      rdwData = { merk: merk, model: model, bouwjaar: bouwjaar, brandstof: brandstof, kleur: kleur, apkVervaldatum: apkVervaldatum };
 
       // Auto-fill brandstof
       const bsSelect = document.getElementById('v-brandstof');
@@ -873,15 +878,29 @@ function updateSummary() {
     '<span class="sc-na">' + naC + ' n.v.t.</span>' +
     '<span>' + unc + ' open</span>';
 
-  // Check adviespunten (section index 10) and reparatie-adviezen (section index 11)
+  // Afkeurpunten per sectie
   let alertHtml = '';
   const acIndex = checklistData.findIndex(function(s){ return s.title.indexOf('Adviespunten') !== -1; });
   const raIndex = checklistData.findIndex(function(s){ return s.title.indexOf('Reparatie') !== -1; });
 
+  // Per sectie afgekeurde items tonen
+  checklistData.forEach(function(section, si) {
+    if (si === acIndex || si === raIndex) return; // die doen we apart
+    const failItems = [];
+    itemStates[si].forEach(function(item, idx) {
+      if (item.status === 'fail') {
+        failItems.push(checklistData[si].items[idx].text);
+      }
+    });
+    if (failItems.length > 0) {
+      alertHtml += '<div class="summary-alert danger"><div><strong>✗ ' + (si+1) + '. ' + section.title + ' (' + failItems.length + ')</strong><br>' + failItems.join('<br>') + '</div></div>';
+    }
+  });
+
+  // Adviespunten
   if (acIndex >= 0) {
-    const acItems = itemStates[acIndex];
     const acChecked = [];
-    acItems.forEach(function(item, idx) {
+    itemStates[acIndex].forEach(function(item, idx) {
       if (item.status === 'ok' || item.status === 'fail') {
         acChecked.push(checklistData[acIndex].items[idx].text);
       }
@@ -891,10 +910,10 @@ function updateSummary() {
     }
   }
 
+  // Reparatie-adviezen
   if (raIndex >= 0) {
-    const raItems = itemStates[raIndex];
     const raChecked = [];
-    raItems.forEach(function(item, idx) {
+    itemStates[raIndex].forEach(function(item, idx) {
       if (item.status === 'ok' || item.status === 'fail') {
         raChecked.push(checklistData[raIndex].items[idx].text);
       }
@@ -936,10 +955,15 @@ function exportPDF() {
   html += '<span><b>Brandstof:</b> ' + brandstof + '</span>';
   html += '</div>';
 
-  // Add vehicle info if looked up
-  var vcTitle = document.querySelector('#vehicleCardContent h3');
-  if (vcTitle) {
-    html += '<div style="padding:5px 8px;background:#f0f0f0;border-radius:3px;font-size:11px;margin-bottom:8px"><b>Voertuig:</b> ' + vcTitle.textContent + '</div>';
+  // Add RDW vehicle info
+  if (rdwData) {
+    html += '<div style="padding:8px 10px;background:#f0f0f0;border-radius:4px;font-size:11px;margin-bottom:10px;border:1px solid #ccc">';
+    html += '<div style="font-size:14px;font-weight:bold;margin-bottom:4px">' + rdwData.merk + ' ' + rdwData.model + '</div>';
+    html += '<span style="margin-right:16px"><b>Bouwjaar:</b> ' + rdwData.bouwjaar + '</span>';
+    html += '<span style="margin-right:16px"><b>Brandstof:</b> ' + rdwData.brandstof + '</span>';
+    html += '<span style="margin-right:16px"><b>Kleur:</b> ' + rdwData.kleur + '</span>';
+    html += '<span><b>APK vervalt:</b> ' + rdwData.apkVervaldatum + '</span>';
+    html += '</div>';
   }
 
   checklistData.forEach(function(section, si) {
@@ -983,9 +1007,21 @@ function exportPDF() {
 
   html += '<div class="p-summary"><b>Samenvatting:</b> ' + okC + ' goedgekeurd &middot; ' + failC + ' afgekeurd &middot; ' + naC + ' n.v.t. &middot; ' + unc + ' niet ingevuld</div>';
 
-  // Adviespunten & reparatie in PDF
+  // Afkeurpunten per sectie in PDF
   var acIdx = checklistData.findIndex(function(s){ return s.title.indexOf('Adviespunten') !== -1; });
   var raIdx = checklistData.findIndex(function(s){ return s.title.indexOf('Reparatie') !== -1; });
+
+  checklistData.forEach(function(section, si) {
+    if (si === acIdx || si === raIdx) return;
+    var failItems = [];
+    itemStates[si].forEach(function(item, idx) {
+      if (item.status === 'fail') failItems.push(checklistData[si].items[idx].text);
+    });
+    if (failItems.length > 0) {
+      html += '<div style="margin-top:6px;padding:6px;border:2px solid #ef4444;border-radius:3px;background:#fef2f2;font-size:10px"><b>✗ ' + (si+1) + '. ' + section.title + ' (' + failItems.length + '):</b><br>' + failItems.join('<br>') + '</div>';
+    }
+  });
+
   if (acIdx >= 0) {
     var acList = [];
     itemStates[acIdx].forEach(function(item, idx) {
